@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+.textBox {
+  @apply  bg-[#181B20] h-[100px] flex justify-center items-center rounded-[10px];
+}
+
+.reveal {
+  @apply opacity-100;
+}
+
+.conceal {
+  @apply opacity-0;
+}
