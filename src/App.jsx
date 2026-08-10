@@ -75,7 +75,7 @@ export default function App() {
   );
 
   // 2. Active Gas Selection State ('fast' | 'standard' | 'slow')
-  const [selectedSpeed, setSelectedSpeed] = useState("standard");
+  // const [selectedSpeed, setSelectedSpeed] = useState("standard");
 
   // 3. Wallet Connection State
   const [walletConnected, setWalletConnected] = useState(false);
@@ -168,7 +168,6 @@ export default function App() {
     //,
   });
 
-  // 1. Get the address from your input ref and trim whitespace
   const currentAddress = inputRef.current?.value?.trim();
 
   const [useBalance, usableBalance] = useState(null);
@@ -243,78 +242,74 @@ export default function App() {
         {/* ================= GAS CARDS TOP GRID ================= */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* FAST CARD */}
+
           <div
-            onClick={() => setSelectedSpeed("fast")}
+            // onClick={() => balance()}
             className={`bg-[#22272E] rounded-2xl p-6 flex flex-col justify-between h-[185px] cursor-pointer transition-all border ${
-              selectedSpeed === "fast"
+              weiBalance
                 ? "border-emerald-500 shadow-lg shadow-emerald-500/10"
                 : "border-[#30363D] hover:border-emerald-500/50"
             }`}
           >
-            <div className="flex items-center gap-3 text-emerald-400 font-semibold text-xl">
-              <FastIcon />
-              
+            <header className="text-emerald-400 font-bold text-xl">
+              {" "}
+              GWEI BALANCE
+            </header>
+
+            <div className="flex items-center justify-center  gap-2">
+              <div className="text-4xl h-[150px] flex items-center justify-center font-extrabold text-emerald-400 tracking-tight">
+                {useBalance} Gwei🔥
+              </div>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-extrabold text-emerald-400 tracking-tight">
-                {useBalance} Gwei
-              </span>
-              <span className="text-2xl">🔥</span>
-            </div>
-            <p className="text-sm text-[#8B949E] font-medium">
+            {/* <p className="text-sm text-[#8B949E] font-medium">
               {gasPrices.fast.confidence}
-            </p>
+            </p> */}
           </div>
 
           {/* STANDARD CARD (ACTIVE HIGHLIGHT) */}
           <div
-            onClick={() => setSelectedSpeed("standard")}
+            // onClick={() => setSelectedSpeed("standard")}
             className={`bg-[#22272E] rounded-2xl p-6 flex flex-col justify-between h-[185px] cursor-pointer transition-all relative overflow-hidden border-2 ${
-              selectedSpeed === "standard"
+              useBalance
                 ? "border-amber-500 shadow-xl shadow-amber-500/10"
                 : "border-[#30363D] hover:border-amber-500/50"
             }`}
           >
+            <header className="text-amber-400 font-bold text-xl">
+              {" "}
+              WEI BALANCE
+            </header>
             {/* Top Border Accent Line from screenshot */}
             <div className="absolute top-0 left-10 right-10 h-[3px] bg-amber-400 rounded-b-full"></div>
 
-            <div className="flex items-center gap-3 text-amber-400 font-semibold text-xl">
-              <ClockIcon />
-              
-            </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-xl font-extrabold text-amber-400 tracking-tight">
-                {weiBalance} wei
+              <span className="text-[23px] font-extrabold text-amber-400 tracking-tight">
+                {weiBalance} wei🔥
               </span>
-              <span className="text-2xl">🔥</span>
+              <span className="text-2xl"></span>
             </div>
-            <p className="text-sm text-[#8B949E] font-medium">
-              {gasPrices.standard.confidence}
-            </p>
+            
           </div>
 
           {/* SLOW CARD */}
           <div
-            onClick={() => setSelectedSpeed("slow")}
+            // onClick={() => balance()}
             className={`bg-[#22272E] rounded-2xl p-6 flex flex-col justify-between h-[185px] cursor-pointer transition-all border ${
-              selectedSpeed === "slow"
+              etherBalance
                 ? "border-sky-400 shadow-lg shadow-sky-400/10"
                 : "border-[#30363D] hover:border-sky-400/50"
             }`}
           >
-            <div className="flex items-center gap-3 text-sky-400 font-semibold text-xl">
-              <HourglassIcon />
-             
-            </div>
+            <header className="text-sky-400 font-bold text-xl">
+              
+              ETH BALANCE
+            </header>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold text-sky-400 tracking-tight">
-                {etherBalance} Eth
+                {etherBalance} Eth🔥
               </span>
-              <span className="text-2xl">🔥</span>
             </div>
-            <p className="text-sm text-[#8B949E] font-medium">
-              {gasPrices.slow.confidence}
-            </p>
+            
           </div>
         </div>
 
@@ -333,76 +328,15 @@ export default function App() {
 
             {/* Chart Graphic Grid Canvas */}
             <div className="relative flex-1 flex flex-col justify-between border-l border-b border-[#30363D]/70 pl-2 pb-2 mt-2">
-              {/* Background Horizontal Grid Lines */}
-              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 pr-2">
-                <div className="border-b border-dashed border-slate-400 w-full h-0"></div>
-                <div className="border-b border-dashed border-slate-400 w-full h-0"></div>
-                <div className="border-b border-dashed border-slate-400 w-full h-0"></div>
-                <div className="border-b border-dashed border-slate-400 w-full h-0"></div>
-              </div>
+              
 
-              {/* Y-AXIS LABELS */}
-              <div className="absolute -left-7 top-0 bottom-0 flex flex-col justify-between text-[11px] text-[#8B949E] font-mono">
-                <span>30</span>
-                <span>50</span>
-                <span>30</span>
-                <span>20</span>
-                <span>10</span>
-                <span>0</span>
-              </div>
+              
 
-              {/* Vector Sparkline Curve */}
-              <div className="w-full h-full pt-2">
-                <svg
-                  className="w-full h-full overflow-visible"
-                  viewBox="0 0 500 150"
-                  preserveAspectRatio="none"
-                >
-                  <defs>
-                    <linearGradient
-                      id="chartGradient"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="#38BDF8"
-                        stopOpacity="0.35"
-                      />
-                      <stop
-                        offset="100%"
-                        stopColor="#38BDF8"
-                        stopOpacity="0.0"
-                      />
-                    </linearGradient>
-                  </defs>
+              
 
-                  {/* Area Under Curve */}
-                  <path d={areaPath} fill="url(#chartGradient)" />
+                  
 
-                  {/* Main Line */}
-                  <path
-                    d={sparklinePath}
-                    fill="none"
-                    stroke="#38BDF8"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </div>
-
-              {/* X-AXIS LABELS */}
-              <div className="flex justify-between w-full text-[11px] text-[#8B949E] font-mono pt-2 px-1">
-                <span>5</span>
-                <span>5</span>
-                <span>20</span>
-                <span>20</span>
-                <span>40</span>
-                <span>30</span>
-                <span>30</span>
-              </div>
+             
             </div>
           </div>
 
