@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { createPublicClient, http, isAddress } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 import { formatUnits, formatGwei, formatEther } from "viem";
+import { Bar } from "react-chartjs-2";
+import "chart.js/auto";
 
 // --- INLINE SVG ICONS (Zero external dependencies) ---
 
@@ -200,6 +202,122 @@ export default function App() {
       console.error("Error fetching balance:", error);
     }
   };
+  //blockNumber
+
+  const [blockNum, setBlockNumber] = useState(null);
+
+  useEffect(() => {
+    const blockNumber = async () => {
+      const num = await client.getBlockNumber();
+      setBlockNumber(num.toString());
+
+      console.log(num);
+    };
+    blockNumber();
+  }, []);
+
+  // Gas fee code for charting
+
+  const BLOCKS_PER_HOUR = 300; // ~12s per block
+  const HOURS = 24;
+
+  //FETCHING BLOCK HISTORICAL DATA FOR CHARTING
+
+  useEffect(() => {
+    const fetchFeeHistory = async () => {
+      try {
+        const historyData = await client.getFeeHistory();
+        const BLOCKS_PER_HOUR = 300;
+        const HOURS = 24;
+
+        const hourlyLabels = [];
+        const hourlyGweiValues = [];
+
+        for (let i = HOURS; i >= 0; i--) {
+          // Convert hours to BigInt blocks to avoid JS type errors
+          const offset = BigInt(i * BLOCKS_PER_HOUR);
+          const targetBlock = currentBlock - offset;
+
+          // Fetch the block details
+          const historyBlock = await client.getBlock({
+            blockNumber: targetBlock,
+          });
+
+          if (historyBlock && historyBlock.baseFeePerGas) {
+            // 1. Convert Wei to Gwei
+            const gwei = Number(historyBlock.baseFeePerGas) / 1e9;
+
+            // 2. Format Unix timestamp to "1:00 PM"
+            const timeLabel = new Date(
+              Number(historyBlock.timestamp) * 1000,
+            ).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            hourlyLabels.push(timeLabel);
+            hourlyGweiValues.push(gwei.toFixed(2));
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching fee history:", error);
+      }
+    };
+  });
+
+  const [feeHistory, setFeeHistory] = useState(null);
+  const [chartData, setChartData] = useState({
+    labels: [],
+    datasets: [],
+  });
+  const [GweiValues, setGweiValues] = useState([]);
+  const btnRef = useRef();
+
+  // CODE FOR THE CHART DATA
+
+  useEffect(() => {
+    const gasFeeHistory = async () => {
+      const history = await client.getFeeHistory({
+        blockCount: 8,
+        rewardPercentiles: [25, 75],
+      });
+
+      if (!history || !history.baseFeePerGas) return;
+
+      console.log(history);
+      setFeeHistory(history);
+
+      const startBlock = Number(history?.oldestBlock);
+      const baseFees = history?.baseFeePerGas?.slice(0, 8);
+
+      const labels = baseFees?.map((_, index) => `${startBlock + index}`) || [];
+      const gweiValues = baseFees?.map((wei) => Number(wei) / 1e9) || [];
+
+      setGweiValues(gweiValues);
+
+      setChartData({
+        labels: hourlyLabels,
+        datasets: [
+          {
+            label: "Base Fee (Gwei)",
+            data: hourlyGweiValues,
+            backgroundColor: "#3b82f6",
+            borderRadius: 4,
+            maxBarThickness: 20,
+            borderRadius: 30,
+          },
+        ],
+      });
+    };
+
+    // ✅ Simple condition: If wallet is connected, run the fetcher!
+    if (currentAddress && btnRef.current) {
+      gasFeeHistory();
+    } else {
+      // Reset chart when wallet disconnects
+      setChartData({ labels: [], datasets: [] });
+    }
+  }, [currentAddress]); // 👈 Re-run automatically when currentAddress changes!
 
   // SVG Chart path matching exact trajectory in visual reference
   const sparklinePath =
@@ -207,8 +325,8 @@ export default function App() {
   const areaPath = `${sparklinePath} L 500 150 L 0 150 Z`;
 
   return (
-    <div className="min-h-screen bg-[#181B20] text-[#C9D1D9] font-sans antialiased p-4 md:p-8 flex justify-center selection:bg-amber-500/20">
-      <div className="w-full max-w-[1140px] space-y-5">
+    <div className="min-h-screen bg-[#181B20] text-[#C9D1D9] font-sans antialiased p-4 md:p-8 flex justify-center selection:bg-amber-50₀/2₀">
+      <div className="w-full max-w-[114₀px] space-y-5">
         {/* ================= HEADER ================= */}
         <header className="flex items-center justify-between pb-1">
           <div className="flex items-center gap-3">
@@ -224,6 +342,7 @@ export default function App() {
             onClick={() => {
               balance();
             }}
+            ref={btnRef}
             className="bg-[#2D333B] hover:bg-[#3C444D] text-white font-medium text-sm px-5 py-2.5 rounded-xl border border-[#444C56] transition-all shadow-sm active:scale-95"
           >
             Connect Wallet
@@ -240,76 +359,44 @@ export default function App() {
         </div>
 
         {/* ================= GAS CARDS TOP GRID ================= */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* FAST CARD */}
+        <div className="grid grid-cols-1 md:flex justify-center gap-5">
+          {/* Dollar balance */}
 
           <div
-            // onClick={() => balance()}
-            className={`bg-[#22272E] rounded-2xl p-6 flex flex-col justify-between h-[185px] cursor-pointer transition-all border ${
+            className={`bg-[#22272E] rounded-2xl breakpoint p-6 flex flex-col justify-between h-[200px] cursor-pointer transition-all border ${
               weiBalance
                 ? "border-emerald-500 shadow-lg shadow-emerald-500/10"
                 : "border-[#30363D] hover:border-emerald-500/50"
             }`}
           >
-            <header className="text-emerald-400 font-bold text-xl">
+            <header className="text-emerald-400 font-bold text-xl md:text-center">
               {" "}
               GWEI BALANCE
             </header>
 
-            <div className="flex items-center justify-center  gap-2">
-              <div className="text-4xl h-[150px] flex items-center justify-center font-extrabold text-emerald-400 tracking-tight">
-                {useBalance} Gwei🔥
-              </div>
-            </div>
-            {/* <p className="text-sm text-[#8B949E] font-medium">
-              {gasPrices.fast.confidence}
-            </p> */}
-          </div>
-
-          {/* STANDARD CARD (ACTIVE HIGHLIGHT) */}
-          <div
-            // onClick={() => setSelectedSpeed("standard")}
-            className={`bg-[#22272E] rounded-2xl p-6 flex flex-col justify-between h-[185px] cursor-pointer transition-all relative overflow-hidden border-2 ${
-              useBalance
-                ? "border-amber-500 shadow-xl shadow-amber-500/10"
-                : "border-[#30363D] hover:border-amber-500/50"
-            }`}
-          >
-            <header className="text-amber-400 font-bold text-xl">
-              {" "}
-              WEI BALANCE
-            </header>
-            {/* Top Border Accent Line from screenshot */}
-            <div className="absolute top-0 left-10 right-10 h-[3px] bg-amber-400 rounded-b-full"></div>
-
-            <div className="flex items-baseline gap-2">
-              <span className="text-[23px] font-extrabold text-amber-400 tracking-tight">
-                {weiBalance} wei🔥
+            <div className="flex gap-2 md:justify-center">
+              <span className="text-[30px] font-extrabold text-emerald-400 tracking-tight">
+                {useBalance ? `${useBalance} Gwei🔥` : "..."}
               </span>
-              <span className="text-2xl"></span>
             </div>
-            
           </div>
 
-          {/* SLOW CARD */}
+          {/* Eth CARD */}
           <div
-            // onClick={() => balance()}
-            className={`bg-[#22272E] rounded-2xl p-6 flex flex-col justify-between h-[185px] cursor-pointer transition-all border ${
+            className={`bg-[#22272E] rounded-2xl breakpoint p-6 flex flex-col justify-between h-[200px] cursor-pointer transition-all border ${
               etherBalance
                 ? "border-sky-400 shadow-lg shadow-sky-400/10"
                 : "border-[#30363D] hover:border-sky-400/50"
             }`}
           >
-            <header className="text-sky-400 font-bold text-xl">
-              
+            <header className="text-sky-400 font-bold text-xl md:text-center">
               ETH BALANCE
             </header>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-extrabold text-sky-400 tracking-tight">
-                {etherBalance} Eth🔥
+            <div className="flex gap-2 md:justify-center">
+              <span className="text-[30px] font-extrabold text-sky-400 tracking-tight">
+                {etherBalance ? `${etherBalance} Eth🔥` : "..."}
               </span>
             </div>
-            
           </div>
         </div>
 
@@ -327,16 +414,16 @@ export default function App() {
             </h2>
 
             {/* Chart Graphic Grid Canvas */}
-            <div className="relative flex-1 flex flex-col justify-between border-l border-b border-[#30363D]/70 pl-2 pb-2 mt-2">
-              
-
-              
-
-              
-
-                  
-
-             
+            <div className=" border-l border-b border-[#30363D]/70 mt-2">
+              <div className="h-[250px] w-full">
+                <Bar
+                  data={chartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -359,6 +446,11 @@ export default function App() {
                     {settings.autoRefresh ? "Auto" : "Manual"})
                   </span>
                 </p>
+
+                {/* <p>
+                  Block Number:{" "}
+                  {blockNumber ? `${blockNumber} n` : "No balance"}
+                </p> */}
               </div>
             </div>
 

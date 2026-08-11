@@ -11,3 +11,7 @@
 .conceal {
   @apply opacity-0;
 }
+
+.breakpoint{
+  @apply md:w-[45%]
+}
