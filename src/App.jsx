@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { createPublicClient, http, isAddress } from "viem";
+import { createPublicClient, http, isAddress, size } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 import { formatUnits, formatGwei, formatEther } from "viem";
 import { Bar } from "react-chartjs-2";
 import "chart.js/auto";
+import { plugins } from "chart.js/auto";
 
 // --- INLINE SVG ICONS (Zero external dependencies) ---
 
@@ -166,17 +167,19 @@ export default function App() {
     chain: sepolia,
     transport: http(
       "https://eth-sepolia.g.alchemy.com/v2/alch_0q3Nl9-Q_33h7GrCBS2Wv",
+      { batch: true },
     ),
     //,
   });
 
-  const currentAddress = inputRef.current?.value?.trim();
-
-  const [useBalance, usableBalance] = useState(null);
+  const [useBalance, setBalance] = useState(null);
   const [weiBalance, setWeiBalance] = useState(null);
   const [etherBalance, setEtherBalance] = useState(null);
 
+
+  const currentAddress = inputRef.current?.value?.trim();
   const balance = async () => {
+    
     console.log("Checking address from ref:", currentAddress);
 
     if (!currentAddress) {
@@ -192,7 +195,7 @@ export default function App() {
         });
 
         const formattedBalance = formatGwei(balancedWei);
-        usableBalance(formattedBalance);
+        setBalance(formattedBalance);
         setWeiBalance(balancedWei.toString());
         setEtherBalance(formatEther(balancedWei));
       } else {
@@ -216,108 +219,185 @@ export default function App() {
     blockNumber();
   }, []);
 
-  // Gas fee code for charting
+  // Gas fee fetching code for charting
 
   const BLOCKS_PER_HOUR = 300; // ~12s per block
   const HOURS = 24;
 
-  //FETCHING BLOCK HISTORICAL DATA FOR CHARTING
+  //FETCHING BLOCK HISTORICAL DATA FOR CHARTING OVER 24 HOURS
+
+  const [gweilabel, setGweiLabel] = useState([]);
+  const [hourlyLabels, setHourlyLabels] = useState([]);
+  const [chartData, setChartData] = useState({
+    labels: [],
+    datasets: [],
+    options: [],
+  });
 
   useEffect(() => {
     const fetchFeeHistory = async () => {
       try {
-        const historyData = await client.getFeeHistory();
+        const currentBlock = await client.getBlockNumber();
         const BLOCKS_PER_HOUR = 300;
         const HOURS = 24;
 
-        const hourlyLabels = [];
-        const hourlyGweiValues = [];
+        // 1. Create an empty array to hold our "waiters"
+        const blockPromises = [];
 
+        // 2. Loop 25 times, but DO NOT use 'await'
         for (let i = HOURS; i >= 0; i--) {
           // Convert hours to BigInt blocks to avoid JS type errors
           const offset = BigInt(i * BLOCKS_PER_HOUR);
           const targetBlock = currentBlock - offset;
 
-          // Fetch the block details
-          const historyBlock = await client.getBlock({
+          // We ask client.getBlock to fetch, but we don't wait for it to finish.
+          // We just push the "Promise" (the pending request) into our array.
+          const request = client.getBlock({
             blockNumber: targetBlock,
           });
 
+          blockPromises.push(request);
+        }
+
+        // 3. Fire all 25 requests at the exact same time!
+        // The code pauses here until EVERY request has successfully returned.
+        const historyBlocks = await Promise.all(blockPromises);
+
+        // 4. Now that we have all the raw data, process it for the chart
+        const hourlyLabels = [];
+        const hourlyGweiValues = [];
+
+        // Loop through the 25 returned blocks
+        historyBlocks.forEach((historyBlock) => {
           if (historyBlock && historyBlock.baseFeePerGas) {
-            // 1. Convert Wei to Gwei
             const gwei = Number(historyBlock.baseFeePerGas) / 1e9;
 
-            // 2. Format Unix timestamp to "1:00 PM"
             const timeLabel = new Date(
               Number(historyBlock.timestamp) * 1000,
             ).toLocaleTimeString([], {
+              weekday: "short",
               hour: "2-digit",
               minute: "2-digit",
             });
 
             hourlyLabels.push(timeLabel);
-            hourlyGweiValues.push(gwei.toFixed(2));
+            hourlyGweiValues.push(gwei);
           }
-        }
+        });
+        // if (btnRef.current.value < 0) {
+        //   console.warn("No historical data fetched for the last 24 hours.");
+        // }
+
+        setChartData({
+          labels: hourlyLabels,
+          datasets: [
+            {
+              data: hourlyGweiValues,
+              backgroundColor: "#2861f0",
+              borderRadius: 30,
+              maxBarThickness: 10,
+            },
+          ],
+        });
       } catch (error) {
         console.error("Error fetching fee history:", error);
       }
     };
-  });
+    fetchFeeHistory();
+  }, []);
 
-  const [feeHistory, setFeeHistory] = useState(null);
-  const [chartData, setChartData] = useState({
-    labels: [],
-    datasets: [],
-  });
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+    },
+    scales: {
+      // 1. Labeling the X-Axis (Bottom)
+      x: {
+        title: {
+          display: true,
+          text: "Time (Last 24 Hours)", // The text people will see
+          color: "#6b7280", // Optional: A nice Tailwind gray color
+          font: {
+            size: 14,
+            weight: "bold",
+          },
+        },
+      },
+      // 2. Labeling the Y-Axis (Left Side)
+      y: {
+        title: {
+          display: true,
+          text: "Gas Price (Gwei)", // The text people will see
+          color: "#6b7280",
+          font: {
+            size: 14,
+            weight: "bold",
+          },
+        },
+      },
+    },
+  };
+
+  // const [feeHistory, setFeeHistory] = useState(null);
+  // const [chartData, setChartData] = useState({
+  //   labels: [],
+  //   datasets: [],
+  // });
   const [GweiValues, setGweiValues] = useState([]);
   const btnRef = useRef();
 
-  // CODE FOR THE CHART DATA
+  // CODE FOR GLOBAL BLOCKCHAIN DATA IN THE CHART
 
-  useEffect(() => {
-    const gasFeeHistory = async () => {
-      const history = await client.getFeeHistory({
-        blockCount: 8,
-        rewardPercentiles: [25, 75],
-      });
+  // useEffect(() => {
+  //   const gasFeeHistory = async () => {
+  //     const history = await client.getFeeHistory({
+  //       blockCount: 8,
+  //       rewardPercentiles: [25, 75],
+  //     });
 
-      if (!history || !history.baseFeePerGas) return;
+  //     if (!history || !history.baseFeePerGas) return;
 
-      console.log(history);
-      setFeeHistory(history);
+  //     console.log(history);
+  //     setFeeHistory(history);
 
-      const startBlock = Number(history?.oldestBlock);
-      const baseFees = history?.baseFeePerGas?.slice(0, 8);
+  //     const startBlock = Number(history?.oldestBlock);
+  //     const baseFees = history?.baseFeePerGas?.slice(0, 8);
 
-      const labels = baseFees?.map((_, index) => `${startBlock + index}`) || [];
-      const gweiValues = baseFees?.map((wei) => Number(wei) / 1e9) || [];
+  //     // const labels = baseFees?.map((_, index) => `${startBlock + index}`) || [];
 
-      setGweiValues(gweiValues);
+  //     const labels =
+  //       gweilabel?.map((_, index) => `${startBlock + index}`) || [];
+  //     const gweiValues = baseFees?.map((wei) => Number(wei) / 1e9) || [];
 
-      setChartData({
-        labels: hourlyLabels,
-        datasets: [
-          {
-            label: "Base Fee (Gwei)",
-            data: hourlyGweiValues,
-            backgroundColor: "#3b82f6",
-            borderRadius: 4,
-            maxBarThickness: 20,
-            borderRadius: 30,
-          },
-        ],
-      });
-    };
+  //     setGweiValues(gweiValues);
 
-    // ✅ Simple condition: If wallet is connected, run the fetcher!
-    if (currentAddress && btnRef.current) {
-      gasFeeHistory();
-    } else {
-      // Reset chart when wallet disconnects
-      setChartData({ labels: [], datasets: [] });
-    }
-  }, [currentAddress]); // 👈 Re-run automatically when currentAddress changes!
+  //     setChartData({
+  //       labels: labels,
+  //       datasets: [
+  //         {
+  //           label: "Base Fee (Gwei)",
+  //           data: gweiValues,
+  //           backgroundColor: "#3b82f6",
+  //           borderRadius: 4,
+  //           maxBarThickness: 20,
+  //           borderRadius: 30,
+  //         },
+  //       ],
+  //     });
+  //   };
+
+  //   // ✅ Simple condition: If wallet is connected, run the fetcher!
+  //   if (currentAddress && btnRef.current) {
+  //     gasFeeHistory();
+  //   } else {
+  //     // Reset chart when wallet disconnects
+  //     setChartData({ labels: [], datasets: [] });
+  //   }
+  // }, [currentAddress]); // 👈 Re-run automatically when currentAddress changes!
 
   // SVG Chart path matching exact trajectory in visual reference
   const sparklinePath =
@@ -405,32 +485,73 @@ export default function App() {
           Current Time: <span className="text-slate-300">{currentTime}</span>
         </div>
 
-        {/* ================= MIDDLE SECTION: GRAPH & SIDE PANELS ================= */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* MAIN GRAPH CONTAINER */}
-          <div className="lg:col-span-2 bg-[#22272E] border border-[#30363D] rounded-2xl p-6 flex flex-col h-[340px]">
+        {/*MIDDLE SECTION: GRAPH */}
+
+        {/* MAIN GRAPH CONTAINER */}
+        {/* Outer Container: Scrollable on mobile, no scroll on medium+ screens */}
+        <div className="bg-[#22272E] h-[500px] p-3 md:rounded-[30px] overflow-x-auto md:overflow-x-hidden overflow-y-hidden">
+          <h2 className="text-lg font-medium text-white mb-4 p-2">
+            Global Gas Price History for Ether (24h)
+          </h2>
+
+          {/* Inner Wrapper: Fixed width on mobile to keep bars readable, full width on desktop */}
+          <div className="border-[#30363D]/70 mt-2 min-w-[600px] md:min-w-0 md:w-full h-[400px]">
+            <div className="w-full h-full">
+              <Bar data={chartData} options={chartOptions} />
+            </div>
+          </div>
+        </div>
+        {/* ================= BOTTOM SECTION: LATEST TRANSACTIONS AND SETTINGS CARD ================= */}
+        <div className="grid grid-cols-1 gap-5 md:flex justify-between">
+          <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 relative  md:w-[66%]">
             <h2 className="text-lg font-medium text-white mb-4">
-              Gas Price History (24h)
+              Latest Transactions
             </h2>
 
-            {/* Chart Graphic Grid Canvas */}
-            <div className=" border-l border-b border-[#30363D]/70 mt-2">
-              <div className="h-[250px] w-full">
-                <Bar
-                  data={chartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                  }}
-                />
-              </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="text-[#8B949E] border-b border-[#30363D] text-xs">
+                    <th className="pb-3 font-normal"></th>
+                    <th className="pb-3 font-normal">Gwei Used</th>
+                    <th className="pb-3 font-normal">From</th>
+                    <th className="pb-3 font-normal">From</th>
+                    <th className="pb-3 font-normal">To</th>
+                    <th className="pb-3 font-normal text-right">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#30363D]/60 font-mono text-xs md:text-sm">
+                  {transactions.map((tx) => (
+                    <tr
+                      key={tx.id}
+                      className="hover:bg-[#2A3038] transition-colors"
+                    >
+                      <td className="py-3 text-white font-sans font-medium">
+                        {tx.hash}
+                      </td>
+                      <td className="py-3 text-emerald-400 font-semibold">
+                        {tx.gwei}
+                      </td>
+                      <td className="py-3 text-emerald-400">{tx.from1}</td>
+                      <td className="py-3 text-[#8B949E]">{tx.from2}</td>
+                      <td className="py-3 text-rose-500 font-medium">
+                        {tx.to}
+                      </td>
+                      <td className="py-3 text-[#8B949E] text-right font-sans">
+                        {tx.time}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
           {/* RIGHT COLUMN SIDE PANELS */}
-          <div className="space-y-5">
+
+          <div className=" w-[full] grid gap-7 md:w-[32%]">
             {/* SETTINGS CARD */}
-            <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6">
+            <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 w-[full]">
               <h3 className="text-lg font-medium text-white mb-3">Settings</h3>
               <div className="space-y-1.5 text-sm text-[#8B949E]">
                 <p>
@@ -455,7 +576,7 @@ export default function App() {
             </div>
 
             {/* TOOLS & RESOURCES CARD (WITH MOUSE CURSOR OVERLAY AS IN REFERENCE PHOTO) */}
-            <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 relative">
+            <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 relative w-[full]">
               <h3 className="text-lg font-medium text-white mb-3">
                 Tools & Resources
               </h3>
@@ -476,54 +597,6 @@ export default function App() {
                 </li>
               </ul>
             </div>
-          </div>
-        </div>
-
-        {/* ================= BOTTOM SECTION: LATEST TRANSACTIONS ================= */}
-        <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 relative">
-          <h2 className="text-lg font-medium text-white mb-4">
-            Latest Transactions
-          </h2>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-[#8B949E] border-b border-[#30363D] text-xs">
-                  <th className="pb-3 font-normal"></th>
-                  <th className="pb-3 font-normal">Gwei Used</th>
-                  <th className="pb-3 font-normal">From</th>
-                  <th className="pb-3 font-normal">From</th>
-                  <th className="pb-3 font-normal">To</th>
-                  <th className="pb-3 font-normal text-right">Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#30363D]/60 font-mono text-xs md:text-sm">
-                {transactions.map((tx) => (
-                  <tr
-                    key={tx.id}
-                    className="hover:bg-[#2A3038] transition-colors"
-                  >
-                    <td className="py-3 text-white font-sans font-medium">
-                      {tx.hash}
-                    </td>
-                    <td className="py-3 text-emerald-400 font-semibold">
-                      {tx.gwei}
-                    </td>
-                    <td className="py-3 text-emerald-400">{tx.from1}</td>
-                    <td className="py-3 text-[#8B949E]">{tx.from2}</td>
-                    <td className="py-3 text-rose-500 font-medium">{tx.to}</td>
-                    <td className="py-3 text-[#8B949E] text-right font-sans">
-                      {tx.time}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Sparkle Icon Decorative Accent at Bottom-Right */}
-          <div className="absolute right-6 bottom-4 pointer-events-none opacity-40">
-            <SparkleIcon />
           </div>
         </div>
       </div>
