@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { createPublicClient, http, isAddress, size } from "viem";
+import { createPublicClient, http, isAddress, size, parseAbi } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 import { formatUnits, formatGwei, formatEther } from "viem";
 import { Bar } from "react-chartjs-2";
@@ -137,13 +137,10 @@ export default function App() {
     setInputBox(input);
   };
 
-  // 8. useRef hook
+  // 8. Button clicked state
+  const [buttonClicked, setButtonClicked] = useState(false);
 
-  const inputRef = useRef();
-
-  const address = () => {
-    const add = inputRef.current.value.trim();
-  };
+  // 9. useRef hook
 
   // ==========================================
   // EFFECTS & HANDLERS
@@ -164,9 +161,9 @@ export default function App() {
   //viem functionality
 
   const client = createPublicClient({
-    chain: sepolia,
+    chain: mainnet,
     transport: http(
-      "https://eth-sepolia.g.alchemy.com/v2/alch_0q3Nl9-Q_33h7GrCBS2Wv",
+      "https://eth-mainnet.g.alchemy.com/v2/alch_0q3Nl9-Q_33h7GrCBS2Wv", // add as an environment variable
       { batch: true },
     ),
     //,
@@ -175,12 +172,14 @@ export default function App() {
   const [useBalance, setBalance] = useState(null);
   const [weiBalance, setWeiBalance] = useState(null);
   const [etherBalance, setEtherBalance] = useState(null);
+  const inputRef = useRef();
+  const [usd, setUSD] = useState(null);
+ const currentAddress = inputRef.current?.value?.trim();
 
+//THIS FUNCTION INCLUDES GETTING BALANCE INCLUDING DOLLAR EQUIVALENT
 
-  const currentAddress = inputRef.current?.value?.trim();
   const balance = async () => {
-    
-    console.log("Checking address from ref:", currentAddress);
+   
 
     if (!currentAddress) {
       console.log("No address typed in the input field!");
@@ -188,36 +187,62 @@ export default function App() {
     }
 
     try {
-      // 2. Validate and fetch
-      if (isAddress(currentAddress)) {
-        const balancedWei = await client.getBalance({
-          address: currentAddress,
-        });
-
-        const formattedBalance = formatGwei(balancedWei);
-        setBalance(formattedBalance);
-        setWeiBalance(balancedWei.toString());
-        setEtherBalance(formatEther(balancedWei));
-      } else {
+      if (!isAddress(currentAddress)) {
         console.log("Invalid Ethereum address format:", currentAddress);
+        return;
       }
+
+      const balancedWei = await client.getBalance({
+        address: currentAddress,
+      });
+
+      const ethBalanceValue = Number.parseFloat(formatEther(balancedWei));
+      const formattedBalance = formatGwei(balancedWei);
+
+      setBalance(formattedBalance);
+      setWeiBalance(balancedWei.toString());
+      setEtherBalance(String(ethBalanceValue));
+
+      // FETCHING DATA FROM COINGECKO API
+
+      const priceData = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+      );
+
+      if (!priceData.ok) {
+        throw new Error("Failed to fetch ETH price");
+      }
+
+      const responseData = await priceData.json();
+      const ethPriceUsd = responseData?.ethereum?.usd;
+
+      if (typeof ethPriceUsd !== "number") {
+        setUSD(null);
+        return;
+      }
+
+      //CONVERTING TO DOLLAR
+
+      const convertedPrice = ethBalanceValue * ethPriceUsd;
+      setUSD(Number(convertedPrice.toFixed(2)));
     } catch (error) {
       console.error("Error fetching balance:", error);
+      setUSD(null);
     }
   };
-  //blockNumber
+  //GETTING BLOCK NUMBER
 
-  const [blockNum, setBlockNumber] = useState(null);
+  // const [blockNum, setBlockNumber] = useState(null);
 
-  useEffect(() => {
-    const blockNumber = async () => {
-      const num = await client.getBlockNumber();
-      setBlockNumber(num.toString());
+  // useEffect(() => {
+  //   const blockNumber = async () => {
+  //     const num = await client.getBlockNumber();
+  //     setBlockNumber(num.toString());
 
-      console.log(num);
-    };
-    blockNumber();
-  }, []);
+  //     console.log(num);
+  //   };
+  //   blockNumber();
+  // }, []);
 
   // Gas fee fetching code for charting
 
@@ -231,80 +256,120 @@ export default function App() {
   const [chartData, setChartData] = useState({
     labels: [],
     datasets: [],
-    options: [],
   });
 
-  useEffect(() => {
-    const fetchFeeHistory = async () => {
-      try {
-        const currentBlock = await client.getBlockNumber();
-        const BLOCKS_PER_HOUR = 300;
-        const HOURS = 24;
+  const [loading, setLoading] = useState();
+  const [errorLoad, setErrorLoad] = useState();
+  const [loaded, setLoaded] = useState();
 
-        // 1. Create an empty array to hold our "waiters"
-        const blockPromises = [];
+  // paragraph updaters
+  const [pA, setPA] = useState();
+  const [pB, setPB] = useState();
+  const [pC, setPC] = useState();
+  const [pD, setPD] = useState();
 
-        // 2. Loop 25 times, but DO NOT use 'await'
-        for (let i = HOURS; i >= 0; i--) {
-          // Convert hours to BigInt blocks to avoid JS type errors
-          const offset = BigInt(i * BLOCKS_PER_HOUR);
-          const targetBlock = currentBlock - offset;
+  // ✅ FETCH FEE HISTORY FUNCTION (outside effect so it can be called)
+  const fetchFeeHistory = async () => {
+    try {
+      setLoading(true);
+      setErrorLoad(false);
+      const currentBlock = await client.getBlockNumber();
+      const BLOCKS_PER_HOUR = 300;
+      const HOURS = 24;
 
-          // We ask client.getBlock to fetch, but we don't wait for it to finish.
-          // We just push the "Promise" (the pending request) into our array.
-          const request = client.getBlock({
-            blockNumber: targetBlock,
+      // 1. Create an empty array to hold our "waiters"
+      const blockPromises = [];
+
+      // 2. Loop 25 times, but DO NOT use 'await'
+      for (let i = HOURS; i >= 0; i--) {
+        // Convert hours to BigInt blocks to avoid JS type errors
+        const offset = BigInt(i * BLOCKS_PER_HOUR);
+        const targetBlock = currentBlock - offset;
+
+        // We ask client.getBlock to fetch, but we don't wait for it to finish.
+        // We just push the "Promise" (the pending request) into our array.
+        const request = client.getBlock({
+          blockNumber: targetBlock,
+        });
+
+        blockPromises.push(request);
+      }
+
+      // 3. Fire all 25 requests at the exact same time!
+      const historyBlocks = await Promise.all(blockPromises);
+
+      // 4. Now that we have all the raw data, process it for the chart
+      const hourlyLabels = [];
+      const hourlyGweiValues = [];
+
+      // Loop through the 25 returned blocks
+      historyBlocks.forEach((historyBlock) => {
+        if (historyBlock && historyBlock.baseFeePerGas) {
+          const gwei = Number(historyBlock.baseFeePerGas) / 1e9;
+
+          const timeLabel = new Date(
+            Number(historyBlock.timestamp) * 1000,
+          ).toLocaleTimeString([], {
+            weekday: "short",
+            hour: "2-digit",
+            minute: "2-digit",
           });
 
-          blockPromises.push(request);
+          hourlyLabels.push(timeLabel);
+          hourlyGweiValues.push(gwei);
         }
+      });
+      setLoaded(true);
+      setChartData({
+        labels: hourlyLabels,
+        datasets: [
+          {
+            data: hourlyGweiValues,
+            backgroundColor: "#2861f0",
+            borderRadius: 30,
+            maxBarThickness: 10,
+          },
+        ],
+      });
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching fee history:", error);
+      setErrorLoad(true);
+      setLoading(false);
+    }
+  };
 
-        // 3. Fire all 25 requests at the exact same time!
-        // The code pauses here until EVERY request has successfully returned.
-        const historyBlocks = await Promise.all(blockPromises);
+  // ✅ SEPARATE EFFECT FOR STATUS MESSAGES
+  useEffect(() => {
+    if (!buttonClicked || !currentAddress) return; // Only run after button is clicked with address
 
-        // 4. Now that we have all the raw data, process it for the chart
-        const hourlyLabels = [];
-        const hourlyGweiValues = [];
-
-        // Loop through the 25 returned blocks
-        historyBlocks.forEach((historyBlock) => {
-          if (historyBlock && historyBlock.baseFeePerGas) {
-            const gwei = Number(historyBlock.baseFeePerGas) / 1e9;
-
-            const timeLabel = new Date(
-              Number(historyBlock.timestamp) * 1000,
-            ).toLocaleTimeString([], {
-              weekday: "short",
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-
-            hourlyLabels.push(timeLabel);
-            hourlyGweiValues.push(gwei);
-          }
-        });
-        // if (btnRef.current.value < 0) {
-        //   console.warn("No historical data fetched for the last 24 hours.");
-        // }
-
-        setChartData({
-          labels: hourlyLabels,
-          datasets: [
-            {
-              data: hourlyGweiValues,
-              backgroundColor: "#2861f0",
-              borderRadius: 30,
-              maxBarThickness: 10,
-            },
-          ],
-        });
-      } catch (error) {
-        console.error("Error fetching fee history:", error);
-      }
-    };
+    // Fetch chart data when button clicked with valid address
     fetchFeeHistory();
-  }, []);
+  }, [buttonClicked, currentAddress]);
+
+  // ✅ EFFECT FOR STATUS MESSAGE DISPLAY
+  useEffect(() => {
+    if (!buttonClicked) return; // Only run after button is clicked
+
+    // Clear previous messages
+    setPA(null);
+    setPB(null);
+    setPC(null);
+    setPD(null);
+
+    // Display status based on current state
+    if (!currentAddress) {
+      setPA("No address have been typed");
+    } else if (loading) {
+      setPB("Fetching data");
+    } else if (loaded) {
+      setPC("Success!");
+    } else if (errorLoad) {
+      setPD("Cannot fetch data, please check your internet connection");
+    }
+  }, [buttonClicked, currentAddress, loading, loaded, errorLoad]);
+
+  // Chart options
 
   const chartOptions = {
     responsive: true,
@@ -342,11 +407,7 @@ export default function App() {
     },
   };
 
-  // const [feeHistory, setFeeHistory] = useState(null);
-  // const [chartData, setChartData] = useState({
-  //   labels: [],
-  //   datasets: [],
-  // });
+ 
   const [GweiValues, setGweiValues] = useState([]);
   const btnRef = useRef();
 
@@ -420,6 +481,7 @@ export default function App() {
 
           <button
             onClick={() => {
+              setButtonClicked(true);
               balance();
             }}
             ref={btnRef}
@@ -438,9 +500,15 @@ export default function App() {
           />
         </div>
 
+        <div className="text-center">
+          <p className="text-xl text-white">{pA}</p>
+          <p className="text-xl text-yellow-500">{pB}</p>
+          <p className="text-xl text-green-500">{pC}</p>
+          <p className="text-xl text-red-500">{pD}</p>
+        </div>
         {/* ================= GAS CARDS TOP GRID ================= */}
         <div className="grid grid-cols-1 md:flex justify-center gap-5">
-          {/* Dollar balance */}
+          {/* USD balance */}
 
           <div
             className={`bg-[#22272E] rounded-2xl breakpoint p-6 flex flex-col justify-between h-[200px] cursor-pointer transition-all border ${
@@ -451,12 +519,12 @@ export default function App() {
           >
             <header className="text-emerald-400 font-bold text-xl md:text-center">
               {" "}
-              GWEI BALANCE
+              USD BALANCE
             </header>
 
             <div className="flex gap-2 md:justify-center">
               <span className="text-[30px] font-extrabold text-emerald-400 tracking-tight">
-                {useBalance ? `${useBalance} Gwei🔥` : "..."}
+                {useBalance && usd !== null && usd !== undefined ? `$${usd}` : "..."}
               </span>
             </div>
           </div>
@@ -473,7 +541,7 @@ export default function App() {
               ETH BALANCE
             </header>
             <div className="flex gap-2 md:justify-center">
-              <span className="text-[30px] font-extrabold text-sky-400 tracking-tight">
+              <span className="text-[30px] font-extrabold text-sky-400 tracking-tight overflow-scroll md:overflow-hidden">
                 {etherBalance ? `${etherBalance} Eth🔥` : "..."}
               </span>
             </div>
