@@ -5,6 +5,9 @@ import { formatUnits, formatGwei, formatEther } from "viem";
 import { Bar } from "react-chartjs-2";
 import "chart.js/auto";
 import { plugins } from "chart.js/auto";
+import { supabase } from "./supabase-client.js";
+import arrow from "./assets/arrow-left.png";
+
 
 // --- INLINE SVG ICONS (Zero external dependencies) ---
 
@@ -67,7 +70,7 @@ const CursorPointerIcon = () => (
 
 // --- MAIN DASHBOARD COMPONENT ---
 
-export default function App() {
+const App = () => {
   // ==========================================
   // STATE DEFINITIONS
   // ==========================================
@@ -163,7 +166,7 @@ export default function App() {
   const client = createPublicClient({
     chain: mainnet,
     transport: http(
-      "https://eth-mainnet.g.alchemy.com/v2/alch_0q3Nl9-Q_33h7GrCBS2Wv", // add as an environment variable
+      "https://eth-mainnet.g.alchemy.com/v2/alch_0q3Nl9-Q_33h7GrCBS2Wv", // add as an environment variable later
       { batch: true },
     ),
     //,
@@ -174,13 +177,11 @@ export default function App() {
   const [etherBalance, setEtherBalance] = useState(null);
   const inputRef = useRef();
   const [usd, setUSD] = useState(null);
- const currentAddress = inputRef.current?.value?.trim();
+  const currentAddress = inputRef.current?.value?.trim();
 
-//THIS FUNCTION INCLUDES GETTING BALANCE INCLUDING DOLLAR EQUIVALENT
+  //THIS FUNCTION INCLUDES GETTING BALANCE INCLUDING DOLLAR EQUIVALENT
 
   const balance = async () => {
-   
-
     if (!currentAddress) {
       console.log("No address typed in the input field!");
       return;
@@ -209,6 +210,8 @@ export default function App() {
         "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
       );
 
+      console.log(priceData);
+
       if (!priceData.ok) {
         throw new Error("Failed to fetch ETH price");
       }
@@ -230,21 +233,8 @@ export default function App() {
       setUSD(null);
     }
   };
-  //GETTING BLOCK NUMBER
 
-  // const [blockNum, setBlockNumber] = useState(null);
-
-  // useEffect(() => {
-  //   const blockNumber = async () => {
-  //     const num = await client.getBlockNumber();
-  //     setBlockNumber(num.toString());
-
-  //     console.log(num);
-  //   };
-  //   blockNumber();
-  // }, []);
-
-  // Gas fee fetching code for charting
+  // Gas fee code for charting
 
   const BLOCKS_PER_HOUR = 300; // ~12s per block
   const HOURS = 24;
@@ -407,7 +397,6 @@ export default function App() {
     },
   };
 
- 
   const [GweiValues, setGweiValues] = useState([]);
   const btnRef = useRef();
 
@@ -460,44 +449,81 @@ export default function App() {
   //   }
   // }, [currentAddress]); // 👈 Re-run automatically when currentAddress changes!
 
+  //Getting latest transactions
+
+  useEffect(() => {
+    const latestTransactions = async () => {
+      try {
+        const transactionBlock = await client.getBlock({
+          includeTransactions: true,
+        });
+        console.log(transactionBlock);
+      } catch (error) {
+        console.error("Error performing action", error);
+      }
+    };
+    latestTransactions();
+  }, []);
+
   // SVG Chart path matching exact trajectory in visual reference
   const sparklinePath =
     "M 0 110 Q 20 120 30 100 T 60 120 T 90 90 T 120 80 T 150 100 T 180 50 T 210 90 T 240 70 T 270 120 T 300 65 T 330 90 T 360 70 T 390 80 T 420 20 T 450 60 T 480 15 L 500 35";
   const areaPath = `${sparklinePath} L 500 150 L 0 150 Z`;
 
+
+
+ 
   return (
-    <div className="min-h-screen bg-[#181B20] text-[#C9D1D9] font-sans antialiased p-4 md:p-8 flex justify-center selection:bg-amber-50₀/2₀">
+    <div className=" bg-[#181B20] text-[#C9D1D9] font-sans p-4 md: flex justify-center selection:bg-amber-50₀/2₀">
       <div className="w-full max-w-[114₀px] space-y-5">
         {/* ================= HEADER ================= */}
-        <header className="flex items-center justify-between pb-1">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-[#22272E] border border-[#30363D] flex items-center justify-center shadow-inner">
-              <EthereumLogo />
-            </div>
-            <h1 className="text-2xl font-semibold text-white tracking-tight">
-              ETH Gas Tracker
-            </h1>
-          </div>
-
-          <button
-            onClick={() => {
-              setButtonClicked(true);
-              balance();
-            }}
-            ref={btnRef}
-            className="bg-[#2D333B] hover:bg-[#3C444D] text-white font-medium text-sm px-5 py-2.5 rounded-xl border border-[#444C56] transition-all shadow-sm active:scale-95"
+        <div className="flex">
+          <aside
+            className={`z-[70] bg-black fixed left-0 top-0 w-[20%] h-full `}
           >
-            Connect Wallet
-          </button>
-        </header>
+           <button className="border-white border-2 w-[30%] p-1 rounded-[30px] font-bold">
+            Close
+           </button>
+            <ul className="border h-[100%] flex flex-col justify-center items-center gap-6 ">
+              <li>Dashboard</li>
+              <li>Whale tracker</li>
+              <li>Account</li>
+              <li>Sign out</li>
+            </ul>
+          </aside>
+          {/* Header */}
+          <div className="border w-full">
+            <header className="flex items-center justify-between pb-1">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-[#22272E] border border-[#30363D] flex items-center justify-center shadow-inner">
+                  <EthereumLogo />
+                </div>
+                <h1 className="text-2xl font-semibold text-white tracking-tight">
+                  ETH Gas Tracker
+                </h1>
+              </div>
 
-        <div className="textBox">
-          <input
-            type="text"
-            ref={inputRef}
-            placeholder="Enter your Wallet Address"
-            className="w-[70%] p-3 rounded-[10px] border-white border m-auto"
-          />
+              <button
+                onClick={() => {
+                  setButtonClicked(true);
+                  balance();
+                }}
+                ref={btnRef}
+                className="bg-[#2D333B] hover:bg-[#3C444D] text-white font-medium text-sm px-5 py-2.5 rounded-xl border border-[#444C56] transition-all shadow-sm active:scale-95"
+              >
+                Connect Wallet
+              </button>
+            </header>
+
+            <div className="textBox">
+              <input
+                type="text"
+                ref={inputRef}
+                placeholder="Enter your Wallet Address"
+                className="w-[70%] p-3 rounded-[10px] border-white border m-auto"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="text-center">
@@ -506,6 +532,7 @@ export default function App() {
           <p className="text-xl text-green-500">{pC}</p>
           <p className="text-xl text-red-500">{pD}</p>
         </div>
+
         {/* ================= GAS CARDS TOP GRID ================= */}
         <div className="grid grid-cols-1 md:flex justify-center gap-5">
           {/* USD balance */}
@@ -524,7 +551,9 @@ export default function App() {
 
             <div className="flex gap-2 md:justify-center">
               <span className="text-[30px] font-extrabold text-emerald-400 tracking-tight">
-                {useBalance && usd !== null && usd !== undefined ? `$${usd}` : "..."}
+                {useBalance && usd !== null && usd !== undefined
+                  ? `$${usd}`
+                  : "..."}
               </span>
             </div>
           </div>
@@ -570,8 +599,8 @@ export default function App() {
           </div>
         </div>
         {/* ================= BOTTOM SECTION: LATEST TRANSACTIONS AND SETTINGS CARD ================= */}
-        <div className="grid grid-cols-1 gap-5 md:flex justify-between">
-          <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 relative  md:w-[66%]">
+        <div className="grid grid-cols-1 gap-5">
+          <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 relative  md:w-[full]">
             <h2 className="text-lg font-medium text-white mb-4">
               Latest Transactions
             </h2>
@@ -580,44 +609,20 @@ export default function App() {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="text-[#8B949E] border-b border-[#30363D] text-xs">
-                    <th className="pb-3 font-normal"></th>
-                    <th className="pb-3 font-normal">Gwei Used</th>
-                    <th className="pb-3 font-normal">From</th>
+                    <th className="pb-3 font-normal">Hash</th>
                     <th className="pb-3 font-normal">From</th>
                     <th className="pb-3 font-normal">To</th>
-                    <th className="pb-3 font-normal text-right">Time</th>
+                    <th className="pb-3 font-normal">Gwei Used</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#30363D]/60 font-mono text-xs md:text-sm">
-                  {transactions.map((tx) => (
-                    <tr
-                      key={tx.id}
-                      className="hover:bg-[#2A3038] transition-colors"
-                    >
-                      <td className="py-3 text-white font-sans font-medium">
-                        {tx.hash}
-                      </td>
-                      <td className="py-3 text-emerald-400 font-semibold">
-                        {tx.gwei}
-                      </td>
-                      <td className="py-3 text-emerald-400">{tx.from1}</td>
-                      <td className="py-3 text-[#8B949E]">{tx.from2}</td>
-                      <td className="py-3 text-rose-500 font-medium">
-                        {tx.to}
-                      </td>
-                      <td className="py-3 text-[#8B949E] text-right font-sans">
-                        {tx.time}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                <tbody className="divide-y divide-[#30363D]/60 font-mono text-xs md:text-sm"></tbody>
               </table>
             </div>
           </div>
 
           {/* RIGHT COLUMN SIDE PANELS */}
 
-          <div className=" w-[full] grid gap-7 md:w-[32%]">
+          <div className=" w-[full] flex gap-7">
             {/* SETTINGS CARD */}
             <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 w-[full]">
               <h3 className="text-lg font-medium text-white mb-3">Settings</h3>
@@ -670,4 +675,6 @@ export default function App() {
       </div>
     </div>
   );
-}
+};
+
+export default App;
