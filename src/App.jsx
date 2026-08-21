@@ -8,7 +8,6 @@ import { plugins } from "chart.js/auto";
 import { supabase } from "./supabase-client.js";
 import arrow from "./assets/arrow-left.png";
 
-
 // --- INLINE SVG ICONS (Zero external dependencies) ---
 
 const EthereumLogo = () => (
@@ -307,6 +306,20 @@ const App = () => {
 
           hourlyLabels.push(timeLabel);
           hourlyGweiValues.push(gwei);
+
+          const { data, error } = supabase.from("Chart").insert([
+            {
+              Chart: hourlyLabels,
+              gwei: hourlyGweiValues,
+            },
+          ]);
+
+          if (error){
+            console.log("Error inserting data", error)
+          }
+          else{
+            console.log("Successfully stored data")
+          }
         }
       });
       setLoaded(true);
@@ -470,21 +483,31 @@ const App = () => {
     "M 0 110 Q 20 120 30 100 T 60 120 T 90 90 T 120 80 T 150 100 T 180 50 T 210 90 T 240 70 T 270 120 T 300 65 T 330 90 T 360 70 T 390 80 T 420 20 T 450 60 T 480 15 L 500 35";
   const areaPath = `${sparklinePath} L 500 150 L 0 150 Z`;
 
+  // sidebar function
 
+  const [side, setSide] = useState(false);
 
- 
+  const handleSlide = () => {
+    setSide(!side);
+  };
+
   return (
     <div className=" bg-[#181B20] text-[#C9D1D9] font-sans p-4 md: flex justify-center selection:bg-amber-50₀/2₀">
       <div className="w-full max-w-[114₀px] space-y-5">
         {/* ================= HEADER ================= */}
         <div className="flex">
           <aside
-            className={`z-[70] bg-black fixed left-0 top-0 w-[20%] h-full `}
+            className={` bg-black fixed left-0 top-0 w-[50%] h-full transition-all duration-300 ${side ? "reveal" : "conceal"} md:w-[20%]`}
           >
-           <button className="border-white border-2 w-[30%] p-1 rounded-[30px] font-bold">
-            Close
-           </button>
-            <ul className="border h-[100%] flex flex-col justify-center items-center gap-6 ">
+            <div className="text-end">
+              <button
+                onClick={handleSlide}
+                className="border-white border-1 w-[30%] p-1 rounded-[30px] font-bold mt-2"
+              >
+                Close
+              </button>
+            </div>
+            <ul className=" h-[100%] flex flex-col justify-center items-center gap-6 ">
               <li>Dashboard</li>
               <li>Whale tracker</li>
               <li>Account</li>
@@ -492,12 +515,16 @@ const App = () => {
             </ul>
           </aside>
           {/* Header */}
-          <div className="border w-full">
+          <div className=" w-full">
             <header className="flex items-center justify-between pb-1">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-[#22272E] border border-[#30363D] flex items-center justify-center shadow-inner">
-                  <EthereumLogo />
-                </div>
+              <div className="flex items-center justify-between  w-[55%]">
+                <button
+                  onClick={handleSlide}
+                  className="border-white  bg-[#22272E] border-1 w-[10%] p-1 rounded-[30px] font-bold mt-2"
+                >
+                  Menu
+                </button>
+
                 <h1 className="text-2xl font-semibold text-white tracking-tight">
                   ETH Gas Tracker
                 </h1>

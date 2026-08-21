@@ -5,11 +5,12 @@
 }
 
 .reveal {
-  @apply opacity-100;
+  @apply translate-x-1   ;
+
 }
 
 .conceal {
-  @apply opacity-0;
+  @apply  -translate-x-full ;
 }
 
 .breakpoint{
