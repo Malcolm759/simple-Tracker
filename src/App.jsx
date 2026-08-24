@@ -25,48 +25,6 @@ const EthereumLogo = () => (
   </svg>
 );
 
-const FastIcon = () => (
-  <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-  </svg>
-);
-
-const ClockIcon = () => (
-  <svg
-    className="w-5 h-5 stroke-current fill-none"
-    strokeWidth="2.5"
-    viewBox="0 0 24 24"
-  >
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 3" />
-  </svg>
-);
-
-const HourglassIcon = () => (
-  <svg
-    className="w-5 h-5 stroke-current fill-none"
-    strokeWidth="2.5"
-    viewBox="0 0 24 24"
-  >
-    <path d="M5 22h14M5 2h14M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
-  </svg>
-);
-
-const SparkleIcon = () => (
-  <svg className="w-7 h-7 text-slate-500 fill-current" viewBox="0 0 24 24">
-    <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z" />
-  </svg>
-);
-
-const CursorPointerIcon = () => (
-  <svg
-    className="w-4 h-4 text-white fill-current absolute -right-2 bottom-0 transform translate-x-1/2 translate-y-1/2"
-    viewBox="0 0 24 24"
-  >
-    <path d="M13.64 21.97C13.14 22.21 12.54 22 12.31 21.5L10.13 16.7L6.47 19.91C6.07 20.26 5.46 20.12 5.23 19.63C5.08 19.31 5 18.96 5 18.6V3.81C5 3.12 5.62 2.62 6.29 2.81L20.16 7.82C20.78 8.04 21.03 8.76 20.68 9.3C20.45 9.66 20.06 9.87 19.63 9.87H14.88L17.16 14.78C17.38 15.28 17.17 15.88 16.67 16.11L13.64 21.97Z" />
-  </svg>
-);
-
 // --- MAIN DASHBOARD COMPONENT ---
 
 const App = () => {
@@ -86,50 +44,12 @@ const App = () => {
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState("");
 
-  // 4. Gas Prices Dynamic State
-  const [gasPrices, setGasPrices] = useState({
-    fast: { gwei: 18, confidence: "99% in < 30s", color: "emerald" },
-    standard: { gwei: 12, confidence: "90% in < 60s", color: "amber" },
-    slow: { gwei: 8, confidence: "75% in < 3min", color: "sky" },
-  });
-
   // 5. Settings Configuration State
   const [settings, setSettings] = useState({
     network: "Ethereum Mainnet",
     refreshInterval: 10, // seconds
     autoRefresh: true,
   });
-
-  // 6. Latest Transactions Data State
-  const [transactions, setTransactions] = useState([
-    {
-      id: 1,
-      hash: "Tx Hash",
-      gwei: "15 Gwei",
-      from1: "00",
-      from2: "10",
-      to: "28 Gwei",
-      time: "...1",
-    },
-    {
-      id: 2,
-      hash: "Gal Uash",
-      gwei: "15 Gwei",
-      from1: "01",
-      from2: "21",
-      to: "28 Gwei",
-      time: "...1",
-    },
-    {
-      id: 3,
-      hash: "Seatinterred",
-      gwei: "28 Gwei",
-      from1: "s",
-      from2: "9",
-      to: "28 Gwei",
-      time: "...2",
-    },
-  ]);
 
   // 7. Input box dynamic state
 
@@ -141,8 +61,6 @@ const App = () => {
 
   // 8. Button clicked state
   const [buttonClicked, setButtonClicked] = useState(false);
-
-  // 9. useRef hook
 
   // ==========================================
   // EFFECTS & HANDLERS
@@ -177,6 +95,7 @@ const App = () => {
   const inputRef = useRef();
   const [usd, setUSD] = useState(null);
   const currentAddress = inputRef.current?.value?.trim();
+  const [storage, setStorage] = useState();
 
   //THIS FUNCTION INCLUDES GETTING BALANCE INCLUDING DOLLAR EQUIVALENT
 
@@ -292,7 +211,7 @@ const App = () => {
       const hourlyGweiValues = [];
 
       // Loop through the 25 returned blocks
-      historyBlocks.forEach((historyBlock) => {
+      historyBlocks.forEach(async (historyBlock) => {
         if (historyBlock && historyBlock.baseFeePerGas) {
           const gwei = Number(historyBlock.baseFeePerGas) / 1e9;
 
@@ -307,27 +226,53 @@ const App = () => {
           hourlyLabels.push(timeLabel);
           hourlyGweiValues.push(gwei);
 
-          const { data, error } = supabase.from("Chart").insert([
+          const { error } = await supabase.from("Chart").upsert([
             {
+              id: 1,
               Chart: hourlyLabels,
               gwei: hourlyGweiValues,
             },
           ]);
 
-          if (error){
-            console.log("Error inserting data", error)
-          }
-          else{
-            console.log("Successfully stored data")
+          if (error) {
+            console.log("Error inserting data", error);
+          } else {
+            console.log("Successfully stored data");
           }
         }
       });
+      // fetching from supabase
+      const { data: dataStored, error } = await supabase
+        .from("Chart")
+        .select("Chart, gwei");
+
+      let allLabels = [];
+      let allValues = [];
+
+      allLabels = dataStored.map((row) => row.Chart);
+      allValues = dataStored.map((row) => Number(row.gwei));
+
+      const rawLabels =
+        typeof dataStored[0].Chart === "string"
+          ? JSON.parse(dataStored[0].Chart)
+          : dataStored[0].Chart;
+
+      const rawValues =
+        typeof dataStored[0].gwei === "string"
+          ? JSON.parse(dataStored[0].gwei)
+          : dataStored[0].gwei;
+
+      allLabels = Array.isArray(rawLabels) ? rawLabels.flat() : [rawLabels];
+      allValues = (
+        Array.isArray(rawValues) ? rawValues.flat() : [rawValues]
+      ).map(Number);
+
       setLoaded(true);
       setChartData({
-        labels: hourlyLabels,
+        labels: allLabels,
         datasets: [
           {
-            data: hourlyGweiValues,
+            data: allValues,
             backgroundColor: "#2861f0",
             borderRadius: 30,
             maxBarThickness: 10,
@@ -410,74 +355,93 @@ const App = () => {
     },
   };
 
-  const [GweiValues, setGweiValues] = useState([]);
   const btnRef = useRef();
 
-  // CODE FOR GLOBAL BLOCKCHAIN DATA IN THE CHART
-
-  // useEffect(() => {
-  //   const gasFeeHistory = async () => {
-  //     const history = await client.getFeeHistory({
-  //       blockCount: 8,
-  //       rewardPercentiles: [25, 75],
-  //     });
-
-  //     if (!history || !history.baseFeePerGas) return;
-
-  //     console.log(history);
-  //     setFeeHistory(history);
-
-  //     const startBlock = Number(history?.oldestBlock);
-  //     const baseFees = history?.baseFeePerGas?.slice(0, 8);
-
-  //     // const labels = baseFees?.map((_, index) => `${startBlock + index}`) || [];
-
-  //     const labels =
-  //       gweilabel?.map((_, index) => `${startBlock + index}`) || [];
-  //     const gweiValues = baseFees?.map((wei) => Number(wei) / 1e9) || [];
-
-  //     setGweiValues(gweiValues);
-
-  //     setChartData({
-  //       labels: labels,
-  //       datasets: [
-  //         {
-  //           label: "Base Fee (Gwei)",
-  //           data: gweiValues,
-  //           backgroundColor: "#3b82f6",
-  //           borderRadius: 4,
-  //           maxBarThickness: 20,
-  //           borderRadius: 30,
-  //         },
-  //       ],
-  //     });
-  //   };
-
-  //   // ✅ Simple condition: If wallet is connected, run the fetcher!
-  //   if (currentAddress && btnRef.current) {
-  //     gasFeeHistory();
-  //   } else {
-  //     // Reset chart when wallet disconnects
-  //     setChartData({ labels: [], datasets: [] });
-  //   }
-  // }, [currentAddress]); // 👈 Re-run automatically when currentAddress changes!
-
   //Getting latest transactions
+  const [txs, setTxs] = useState([]);
 
   useEffect(() => {
-    const latestTransactions = async () => {
-      try {
-        const transactionBlock = await client.getBlock({
-          includeTransactions: true,
-        });
-        console.log(transactionBlock);
-      } catch (error) {
-        console.error("Error performing action", error);
-      }
-    };
-    latestTransactions();
-  }, []);
+    try {
+      const unwatch = client.watchBlocks({
+        includeTransactions: true,
+        emitMissed: true,
+        onBlock: (block) => {
+          // 1. Check if transactions exist in the block
+          if (!block.transactions || block.transactions.length === 0) return;
 
+          // 2. Loop through the first 10 transactions
+          const newTransactions = block.transactions
+            .slice(0, 10)
+            .map(async (tx) => {
+              const ethValue = formatEther(tx.value);
+
+              // Convert Wei to Gwei
+              const gweiPrice = tx.gasPrice
+                ? (Number(tx.gasPrice) / 1000000000).toFixed(2)
+                : "N/A";
+
+              const { error } = await supabase.from("transactions").insert(
+                [
+                  {
+                    hash: tx.hash,
+                    from: tx.from,
+                    to: tx.to,
+                    value: parseFloat(ethValue),
+                    gas: parseFloat(gweiPrice),
+                  },
+                ],
+                { onConflict: "hash" },
+              );
+
+              if (error) {
+                console.error(
+                  "Supabase Detailed Error:",
+                  error.message,
+                  error.details,
+                );
+              }
+
+              // RETURN the object inside the .map() callback
+              // return {
+              //   hash: tx.hash,
+              //   from: tx.from,
+              //   to: tx.to,
+              //   value: ethValue,
+              //   gasPriceGwei: gweiPrice,
+              // };
+            });
+        },
+      });
+
+      return () => unwatch();
+    } catch (error) {
+      console.error("Error performing action", error);
+    }
+  }, [currentAddress]);
+
+  const [hash, setHash] = useState();
+  const [from, setFrom] = useState();
+  const [to, setTo] = useState();
+  const [value, setValue] = useState();
+  const [gas, setGas] = useState();
+
+  const txData = async () => {
+    try {
+      const { data, error } = await supabase.from("transactions").select("*");
+      setHash(data.hash);
+      setFrom(data.from);
+      setTo(data.to);
+      setValue(data.value);
+      setGas(data.gas);
+    } catch (error) {
+      console.error("Cannot fetch transaction data", error);
+    }
+  };
+
+  const shorten = (address) => {
+    if (!address) return "Contract Creation";
+    return address.slice(0, 6) + "..." + address.slice(-4);
+  };
   // SVG Chart path matching exact trajectory in visual reference
   const sparklinePath =
     "M 0 110 Q 20 120 30 100 T 60 120 T 90 90 T 120 80 T 150 100 T 180 50 T 210 90 T 240 70 T 270 120 T 300 65 T 330 90 T 360 70 T 390 80 T 420 20 T 450 60 T 480 15 L 500 35";
@@ -485,18 +449,18 @@ const App = () => {
 
   // sidebar function
 
-  const [side, setSide] = useState(false);
+  // const [side, setSide] = useState(false);
 
-  const handleSlide = () => {
-    setSide(!side);
-  };
+  // const handleSlide = () => {
+  //   setSide(!side);
+  // };
 
   return (
     <div className=" bg-[#181B20] text-[#C9D1D9] font-sans p-4 md: flex justify-center selection:bg-amber-50₀/2₀">
       <div className="w-full max-w-[114₀px] space-y-5">
         {/* ================= HEADER ================= */}
         <div className="flex">
-          <aside
+          {/* <aside
             className={` bg-black fixed left-0 top-0 w-[50%] h-full transition-all duration-300 ${side ? "reveal" : "conceal"} md:w-[20%]`}
           >
             <div className="text-end">
@@ -507,23 +471,24 @@ const App = () => {
                 Close
               </button>
             </div>
+
             <ul className=" h-[100%] flex flex-col justify-center items-center gap-6 ">
               <li>Dashboard</li>
               <li>Whale tracker</li>
               <li>Account</li>
               <li>Sign out</li>
             </ul>
-          </aside>
+          </aside> */}
           {/* Header */}
           <div className=" w-full">
             <header className="flex items-center justify-between pb-1">
               <div className="flex items-center justify-between  w-[55%]">
-                <button
+                {/* <button
                   onClick={handleSlide}
                   className="border-white  bg-[#22272E] border-1 w-[10%] p-1 rounded-[30px] font-bold mt-2"
                 >
                   Menu
-                </button>
+                </button> */}
 
                 <h1 className="text-2xl font-semibold text-white tracking-tight">
                   ETH Gas Tracker
@@ -632,17 +597,44 @@ const App = () => {
               Latest Transactions
             </h2>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-scroll md:overflow-x-hidden">
+              <table border="1" className="w-[200%] md:w-full ">
                 <thead>
-                  <tr className="text-[#8B949E] border-b border-[#30363D] text-xs">
-                    <th className="pb-3 font-normal">Hash</th>
-                    <th className="pb-3 font-normal">From</th>
-                    <th className="pb-3 font-normal">To</th>
-                    <th className="pb-3 font-normal">Gwei Used</th>
+                  <tr>
+                    <th className="text-start">Tx Hash</th>
+                    <th className="text-start">From</th>
+                    <th className="text-start">To</th>
+                    <th className="text-start">Value (ETH)</th>
+                    <th className="text-start">Gas Price (Gwei)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#30363D]/60 font-mono text-xs md:text-sm"></tbody>
+                <tbody>
+                  {/* {txs.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" style={{ textAlign: "center" }}>
+                        Waiting for next Ethereum block...
+                      </td>
+                    </tr>
+                  ) : (
+                    txs.map((tx) => (
+                      <tr key={tx.hash}>
+                        <td>{shorten(tx.hash)}</td>
+                        <td>{shorten(tx.from)}</td>
+                        <td>{shorten(tx.to)}</td>
+                        <td>{Number(tx.value).toFixed(4)}</td>
+                        <td>{tx.gasPriceGwei}</td>
+                      </tr>
+                    ))
+                  )} */}
+
+                  <tr key={hash}>
+                    <td>{hash}</td>
+                    <td>{from}</td>
+                    <td>{to}</td>
+                    <td>{Number(value).toFixed(4)}</td>
+                    <td>{gas}</td>
+                  </tr>
+                </tbody>
               </table>
             </div>
           </div>
@@ -685,9 +677,6 @@ const App = () => {
                 <li className="hover:text-white cursor-pointer transition-colors relative inline-block">
                   Viem Docs
                   {/* Mouse Cursor Visual matching the prompt photo */}
-                  <span className="absolute left-[70px] top-[2px] pointer-events-none">
-                    <CursorPointerIcon />
-                  </span>
                 </li>
                 <li className="hover:text-white cursor-pointer transition-colors">
                   Wagmi Docs
