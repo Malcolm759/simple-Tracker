@@ -359,57 +359,51 @@ const App = () => {
 
   //Getting latest transactions
   const [txs, setTxs] = useState([]);
+  //fetch from supabase
+  const fetchFromSupabase = async () => {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (!error) setTxs(data || []);
+  };
 
   useEffect(() => {
+    // 1. Load initial records on mount
+    fetchFromSupabase();
+
     try {
       const unwatch = client.watchBlocks({
         includeTransactions: true,
         emitMissed: true,
-        onBlock: (block) => {
-          // 1. Check if transactions exist in the block
+        onBlock: async (block) => {
+          // 2. Validate transactions exist
           if (!block.transactions || block.transactions.length === 0) return;
 
-          // 2. Loop through the first 10 transactions
-          const newTransactions = block.transactions
-            .slice(0, 10)
-            .map(async (tx) => {
-              const ethValue = formatEther(tx.value);
+          // 3. Format raw Viem data into clean plain JS objects
+          const cleanTxs = block.transactions.slice(0, 10).map((tx) => ({
+            hash: tx.hash,
+            from: tx.from,
+            to: tx.to,
+            value: parseFloat(formatEther(tx.value)),
+            gas: tx.gasPrice
+              ? parseFloat((Number(tx.gasPrice) / 1e9).toFixed(2))
+              : 0,
+          }));
 
-              // Convert Wei to Gwei
-              const gweiPrice = tx.gasPrice
-                ? (Number(tx.gasPrice) / 1000000000).toFixed(2)
-                : "N/A";
+          // 4. Save formatted array to Supabase
+          const { error } = await supabase
+            .from("transactions")
+            .upsert(cleanTxs, { onConflict: "hash" });
 
-              const { error } = await supabase.from("transactions").insert(
-                [
-                  {
-                    hash: tx.hash,
-                    from: tx.from,
-                    to: tx.to,
-                    value: parseFloat(ethValue),
-                    gas: parseFloat(gweiPrice),
-                  },
-                ],
-                { onConflict: "hash" },
-              );
+          if (error) {
+            console.error("Supabase upsert error:", error);
+            return;
+          }
 
-              if (error) {
-                console.error(
-                  "Supabase Detailed Error:",
-                  error.message,
-                  error.details,
-                );
-              }
-
-              // RETURN the object inside the .map() callback
-              // return {
-              //   hash: tx.hash,
-              //   from: tx.from,
-              //   to: tx.to,
-              //   value: ethValue,
-              //   gasPriceGwei: gweiPrice,
-              // };
-            });
+          // 5. Re-fetch updated rows to refresh state
+          fetchFromSupabase();
         },
       });
 
@@ -417,36 +411,12 @@ const App = () => {
     } catch (error) {
       console.error("Error performing action", error);
     }
-  }, [currentAddress]);
-
-  const [hash, setHash] = useState();
-  const [from, setFrom] = useState();
-  const [to, setTo] = useState();
-  const [value, setValue] = useState();
-  const [gas, setGas] = useState();
-
-  const txData = async () => {
-    try {
-      const { data, error } = await supabase.from("transactions").select("*");
-      setHash(data.hash);
-      setFrom(data.from);
-      setTo(data.to);
-      setValue(data.value);
-      setGas(data.gas);
-    } catch (error) {
-      console.error("Cannot fetch transaction data", error);
-    }
-  };
+  }, []);
 
   const shorten = (address) => {
     if (!address) return "Contract Creation";
     return address.slice(0, 6) + "..." + address.slice(-4);
   };
-  // SVG Chart path matching exact trajectory in visual reference
-  const sparklinePath =
-    "M 0 110 Q 20 120 30 100 T 60 120 T 90 90 T 120 80 T 150 100 T 180 50 T 210 90 T 240 70 T 270 120 T 300 65 T 330 90 T 360 70 T 390 80 T 420 20 T 450 60 T 480 15 L 500 35";
-  const areaPath = `${sparklinePath} L 500 150 L 0 150 Z`;
-
   // sidebar function
 
   // const [side, setSide] = useState(false);
@@ -609,11 +579,9 @@ const App = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* {txs.length === 0 ? (
+                  {txs.length === 0 ? (
                     <tr>
-                      <td colSpan="5" style={{ textAlign: "center" }}>
-                        Waiting for next Ethereum block...
-                      </td>
+                      <td colSpan="5"></td>
                     </tr>
                   ) : (
                     txs.map((tx) => (
@@ -622,18 +590,10 @@ const App = () => {
                         <td>{shorten(tx.from)}</td>
                         <td>{shorten(tx.to)}</td>
                         <td>{Number(tx.value).toFixed(4)}</td>
-                        <td>{tx.gasPriceGwei}</td>
+                        <td>{tx.gas}</td>
                       </tr>
                     ))
-                  )} */}
-
-                  <tr key={hash}>
-                    <td>{hash}</td>
-                    <td>{from}</td>
-                    <td>{to}</td>
-                    <td>{Number(value).toFixed(4)}</td>
-                    <td>{gas}</td>
-                  </tr>
+                  )}
                 </tbody>
               </table>
             </div>
