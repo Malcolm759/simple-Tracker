@@ -115,7 +115,9 @@ const App = () => {
         address: currentAddress,
       });
 
-      const ethBalanceValue = Number.parseFloat(formatEther(balancedWei));
+      const ethBalanceValue = Number.parseFloat(
+        formatEther(balancedWei),
+      ).toFixed(6);
       const formattedBalance = formatGwei(balancedWei);
 
       setBalance(formattedBalance);
@@ -365,7 +367,7 @@ const App = () => {
       .from("transactions")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(10);
     if (!error) setTxs(data || []);
   };
 
@@ -408,6 +410,22 @@ const App = () => {
       });
 
       return () => unwatch();
+    } catch (error) {
+      console.error("Error performing action", error);
+    }
+  }, []);
+
+  const [gasCurrently, setGasCurrently] = useState(null);
+
+  useEffect(() => {
+    try {
+      const gasPriceCurrently = async () => {
+        const currentGas = await client.getGasPrice();
+        const gweiGas = formatGwei(currentGas);
+        console.log(gweiGas);
+        setGasCurrently(gweiGas);
+      };
+      console.log(gasPriceCurrently());
     } catch (error) {
       console.error("Error performing action", error);
     }
@@ -560,11 +578,18 @@ const App = () => {
             </div>
           </div>
         </div>
+
+        {/* CONFIDENCE CARD
+        <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 w-[full]">
+          
+
+          
+        </div> */}
         {/* ================= BOTTOM SECTION: LATEST TRANSACTIONS AND SETTINGS CARD ================= */}
         <div className="grid grid-cols-1 gap-5">
           <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 relative  md:w-[full]">
             <h2 className="text-lg font-medium text-white mb-4">
-              Latest Transactions
+              Latest Transactions for the Ethereum blockchain
             </h2>
 
             <div className="overflow-x-scroll md:overflow-x-hidden">
@@ -596,55 +621,6 @@ const App = () => {
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN SIDE PANELS */}
-
-          <div className=" w-[full] flex gap-7">
-            {/* SETTINGS CARD */}
-            <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 w-[full]">
-              <h3 className="text-lg font-medium text-white mb-3">Settings</h3>
-              <div className="space-y-1.5 text-sm text-[#8B949E]">
-                <p>
-                  Network:{" "}
-                  <span className="text-white font-medium">
-                    {settings.network}
-                  </span>
-                </p>
-                <p>
-                  Refresh Interval:{" "}
-                  <span className="text-white font-medium">
-                    {settings.refreshInterval} seconds (
-                    {settings.autoRefresh ? "Auto" : "Manual"})
-                  </span>
-                </p>
-
-                {/* <p>
-                  Block Number:{" "}
-                  {blockNumber ? `${blockNumber} n` : "No balance"}
-                </p> */}
-              </div>
-            </div>
-
-            {/* TOOLS & RESOURCES CARD (WITH MOUSE CURSOR OVERLAY AS IN REFERENCE PHOTO) */}
-            <div className="bg-[#22272E] border border-[#30363D] rounded-2xl p-6 relative w-[full]">
-              <h3 className="text-lg font-medium text-white mb-3">
-                Tools & Resources
-              </h3>
-
-              <ul className="space-y-2 text-sm text-[#C9D1D9]">
-                <li className="hover:text-white cursor-pointer transition-colors relative inline-block">
-                  Viem Docs
-                  {/* Mouse Cursor Visual matching the prompt photo */}
-                </li>
-                <li className="hover:text-white cursor-pointer transition-colors">
-                  Wagmi Docs
-                </li>
-                <li className="hover:text-white cursor-pointer transition-colors">
-                  TanStack Query
-                </li>
-              </ul>
             </div>
           </div>
         </div>
