@@ -362,7 +362,7 @@ const App = () => {
       .from("transactions")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(25);
+      .limit(10);
     if (!error) setTxs(data || []);
   };
 
