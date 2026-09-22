@@ -82,10 +82,7 @@ const App = () => {
 
   const client = createPublicClient({
     chain: mainnet,
-    transport: http(
-      "https://eth-mainnet.g.alchemy.com/v2/alch_0q3Nl9-Q_33h7GrCBS2Wv", // add as an environment variable later
-      { batch: true },
-    ),
+    transport: http(import.meta.env.VITE_ALCHEMY_KEY, { batch: true }),
     //,
   });
 
@@ -126,9 +123,7 @@ const App = () => {
 
       // FETCHING DATA FROM COINGECKO API
 
-      const priceData = await fetch(
-        "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
-      );
+      const priceData = await fetch(import.meta.env.VITE_COINGECKO_KEY);
 
       console.log(priceData);
 
@@ -444,7 +439,7 @@ const App = () => {
   // };
 
   return (
-    <div className=" bg-[#181B20] text-[#C9D1D9] font-sans p-4 md: flex justify-center selection:bg-amber-50₀/2₀">
+    <div className="bg-[#181B20] text-[#C9D1D9] font-sans p-4 md: flex justify-center selection:bg-amber-50₀/2₀ h-screen">
       <div className="w-full max-w-[114₀px] space-y-5">
         {/* ================= HEADER ================= */}
         <div className="flex">
