@@ -439,7 +439,7 @@ const App = () => {
   // };
 
   return (
-    <div className="bg-[#181B20] h-[100%] text-[#C9D1D9] font-sans p-4 md: flex justify-center selection:bg-amber-50₀/2₀ h-screen">
+    <div className="bg-[#181B20] text-[#C9D1D9] font-sans p-4 md: flex justify-center selection:bg-amber-50₀/2₀ min-h-screen">
       <div className="w-full max-w-[114₀px] space-y-5">
         {/* ================= HEADER ================= */}
         <div className="flex">
